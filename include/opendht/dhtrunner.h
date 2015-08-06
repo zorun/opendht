@@ -329,8 +329,10 @@ public:
      * Quit and wait for all threads to terminate.
      * No callbacks will be called after this method returns.
      * All internal state will be lost. The DHT can then be run again with @run().
+     * @param reuse_sockets If true, internal sockets won't be closed and will be
+     *        reused for the following run.
      */
-    void join();
+    void join(bool reuse_sockets = false);
 
 private:
 
@@ -353,6 +355,9 @@ private:
 
     std::atomic<bool> running {false};
 
+    sockaddr_in  bound4;
+    sockaddr_in6 bound6;
+    int s4 = -1, s6 = -1;
     Dht::Status status4 {Dht::Status::Disconnected},
                 status6 {Dht::Status::Disconnected};
     StatusCallback statusCb {nullptr};

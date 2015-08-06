@@ -53,6 +53,10 @@ DhtRunner::DhtRunner()
 DhtRunner::~DhtRunner()
 {
     join();
+    if (s4 >= 0)
+        close(s4);
+    if (s6 >= 0)
+        close(s6);
 #ifdef _WIN32
     WSACleanup();
 #endif
@@ -117,7 +121,7 @@ DhtRunner::run(const sockaddr_in* local4, const sockaddr_in6* local6, const cryp
 }
 
 void
-DhtRunner::join()
+DhtRunner::join(bool reuse_sockets)
 {
     running = false;
     cv.notify_all();
@@ -130,6 +134,12 @@ DhtRunner::join()
         dht_.reset();
         status4 = Dht::Status::Disconnected;
         status6 = Dht::Status::Disconnected;
+    }
+    if (not reuse_sockets) {
+        if (s4 >= 0) close(s4);
+        if (s6 >= 0) close(s6);
+        s4 = -1;
+        s6 = -1;
     }
 }
 
@@ -182,19 +192,20 @@ DhtRunner::doRun(const sockaddr_in* sin4, const sockaddr_in6* sin6, const crypto
 {
     dht_.reset();
 
-    int s4 = -1,
-        s6 = -1;
-    if (sin4) {
+    if (sin4 and (s4 < 0 or memcmp(sin4, &bound4, sizeof(sockaddr_in)))) {
+        if (s4 >= 0) close(s4);
         s4 = socket(PF_INET, SOCK_DGRAM, 0);
         if(s4 >= 0) {
             int rc = bind(s4, (sockaddr*)sin4, sizeof(sockaddr_in));
             if(rc < 0)
                 throw DhtException("Can't bind IPv4 socket on " + dht::print_addr((sockaddr*)sin4, sizeof(sockaddr_in)));
+            std::copy_n((uint8_t*)sin4, sizeof(sockaddr_in), (uint8_t*)&bound4);
         }
     }
 
 #if 0
-    if (sin6) {
+    if (sin6 and (s6 < 0 or memcmp(sin6, &bound6, sizeof(sockaddr_in6)))) {
+        if (s6 >= 0) close(s6);
         s6 = socket(PF_INET6, SOCK_DGRAM, 0);
         if(s6 >= 0) {
             int val = 1;
@@ -205,13 +216,14 @@ DhtRunner::doRun(const sockaddr_in* sin4, const sockaddr_in6* sin6, const crypto
             rc = bind(s6, (sockaddr*)sin6, sizeof(sockaddr_in6));
             if(rc < 0)
                 throw DhtException("Can't bind IPv6 socket on " + dht::print_addr((sockaddr*)sin6, sizeof(sockaddr_in6)));
+            std::copy_n((uint8_t*)sin6, sizeof(sockaddr_in6), (uint8_t*)&bound6);
         }
     }
 #endif
 
     dht_ = std::unique_ptr<SecureDht>(new SecureDht {s4, s6, identity});
 
-    rcv_thread = std::thread([this,s4,s6]() {
+    rcv_thread = std::thread([this]() {
         try {
             while (true) {
                 uint8_t buf[4096 * 64];
@@ -259,10 +271,6 @@ DhtRunner::doRun(const sockaddr_in* sin4, const sockaddr_in6* sin6, const crypto
         } catch (const std::exception& e) {
             std::cerr << "Error int DHT networking thread: " << e.what() << std::endl;
         }
-        if (s4 >= 0)
-            close(s4);
-        if (s6 >= 0)
-            close(s6);
     });
 }
 
