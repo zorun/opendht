@@ -739,16 +739,10 @@ Dht::Search::insertNode(std::shared_ptr<Node> node, time_point now, const Blob& 
     if (nodes.size() >= SEARCH_NODES && id.xorCmp(nid, nodes.back().node->id) > 0 && node->isExpired(now))
         return false;
 
-    // Reset search timer if it was empty
-    if (nodes.empty()) {
-        step_time = TIME_INVALID;
-        get_step_time = TIME_INVALID;
-    }
-
     bool found = false;
     unsigned num_candidates = 0;
     auto n = std::find_if(nodes.begin(), nodes.end(), [&](const SearchNode& sn) {
-        if (sn.candidate)
+        if (sn.candidate or sn.node->isExpired(now))
             num_candidates++;
         if (sn.node == node) {
             found = true;
@@ -757,16 +751,19 @@ Dht::Search::insertNode(std::shared_ptr<Node> node, time_point now, const Blob& 
         return id.xorCmp(nid, sn.node->id) < 0;
     });
     if (!found) {
-        if (nodes.size()-num_candidates >= SEARCH_NODES or nodes.size() >= SEARCH_NODES+TARGET_NODES/2) {
+        if (nodes.size()-num_candidates >= SEARCH_NODES) {
             if (node->isExpired(now))
                 return false;
-            if (n == nodes.end()) {
-                // search is full, try to remove an expired node
-                if (not removeExpiredNode(now))
-                    return false;
-                n = nodes.end();
-            }
+            if (n == nodes.end())
+                return false;
         }
+
+        // Reset search timer if the search is empty
+        if (nodes.empty()) {
+            step_time = TIME_INVALID;
+            get_step_time = TIME_INVALID;
+        }
+
         //bool synced = isSynced(now);
         n = nodes.insert(n, SearchNode(node));
         node->time = now;
@@ -784,10 +781,7 @@ Dht::Search::insertNode(std::shared_ptr<Node> node, time_point now, const Blob& 
     if (not token.empty()) {
         n->getStatus.reply_time = now;
         n->getStatus.request_time = TIME_INVALID;
-        if (n->candidate) {
-            n->candidate = false;
-            //std::cout << "Confirm candidate node " << node->id << " to synced search " << id << std::endl;
-        }
+        n->candidate = false;
         if (token.size() <= 64)
             n->token = token;
         expired = false;
