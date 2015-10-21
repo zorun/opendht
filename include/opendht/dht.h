@@ -431,7 +431,7 @@ private:
         RoutingTable::const_iterator findBucket(const InfoHash& id) const;
 
         /**
-         * Returns true if the id is in the bucket's range.
+         * Return true if the id is in the bucket's range.
          */
         inline bool contains(const RoutingTable::const_iterator& bucket, const InfoHash& id) const {
             return InfoHash::cmp(bucket->first, id) <= 0
@@ -439,7 +439,14 @@ private:
         }
 
         /**
-         * Returns a random id in the bucket's range.
+         * Return true if the table has no bucket ore one empty buket.
+         */
+        inline bool isEmpty() const {
+            return empty() || (size() == 1 && front().nodes.empty());
+        }
+
+        /**
+         * Return a random id in the bucket's range.
          */
         InfoHash randomId(const RoutingTable::const_iterator& bucket) const;
 
@@ -581,8 +588,11 @@ private:
         std::map<size_t, LocalListener> listeners {};
         size_t listener_token = 1;
 
+        /**
+         * @returns true if the node was not present and added to the search
+         */
         bool insertNode(std::shared_ptr<Node> n, time_point now, const Blob& token={});
-        void insertBucket(const Bucket&, time_point now);
+        unsigned insertBucket(const Bucket&, time_point now);
 
         /**
          * Can we use this search to announce ?
@@ -616,6 +626,8 @@ private:
         time_point getNextStepTime(const std::map<ValueType::Id, ValueType>& types, time_point now) const;
 
         bool removeExpiredNode(time_point now);
+
+        unsigned refill(const RoutingTable&, time_point now);
 
         std::vector<std::shared_ptr<Node>> getNodes() const;
     };

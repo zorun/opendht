@@ -750,6 +750,8 @@ Dht::Search::insertNode(std::shared_ptr<Node> node, time_point now, const Blob& 
         }
         return id.xorCmp(nid, sn.node->id) < 0;
     });
+
+    bool new_search_node = false;
     if (!found) {
         if (nodes.size()-num_candidates >= SEARCH_NODES) {
             if (node->isExpired(now))
@@ -767,6 +769,7 @@ Dht::Search::insertNode(std::shared_ptr<Node> node, time_point now, const Blob& 
         //bool synced = isSynced(now);
         n = nodes.insert(n, SearchNode(node));
         node->time = now;
+        new_search_node = true;
         /*if (synced) {
             n->candidate = true;
             //std::cout << "Adding candidate node " << node->id << " to IPv" << (af==AF_INET?'4':'6') << " synced search " << id << std::endl;
@@ -786,7 +789,7 @@ Dht::Search::insertNode(std::shared_ptr<Node> node, time_point now, const Blob& 
             n->token = token;
         expired = false;
     }
-    return true;
+    return new_search_node;
 }
 
 std::vector<std::shared_ptr<Node>>
@@ -962,28 +965,33 @@ Dht::searchStep(Search& sr)
                     return sn.candidate or sn.node->isExpired(now);
                 }) == sr.nodes.size())
         {
-            DHT_ERROR("[search %s IPv%c] expired", sr.id.toString().c_str(), sr.af == AF_INET ? '4' : '6');
-            // no nodes or all expired nodes
-            sr.expired = true;
-            if (sr.announce.empty() && sr.listeners.empty()) {
-                // Listening or announcing requires keeping the cluster up to date.
-                sr.done = true;
-            }
-            {
-                auto get_cbs = std::move(sr.callbacks);
-                for (const auto& g : get_cbs) {
-                    if (g.done_cb)
-                        g.done_cb(false, {});
+            unsigned added = sr.refill(sr.af == AF_INET ? buckets : buckets6, now);
+            if (added) {
+                DHT_WARN("[search %s IPv%c] refilled with %u nodes", sr.id.toString().c_str(), (sr.af == AF_INET) ? '4' : '6', added);
+            } else {
+                DHT_ERROR("[search %s IPv%c] expired", sr.id.toString().c_str(), sr.af == AF_INET ? '4' : '6');
+                // no nodes or all expired nodes
+                sr.expired = true;
+                if (sr.announce.empty() && sr.listeners.empty()) {
+                    // Listening or announcing requires keeping the cluster up to date.
+                    sr.done = true;
                 }
-            }
-            {
-                std::vector<DoneCallback> a_cbs;
-                a_cbs.reserve(sr.announce.size());
-                for (const auto& a : sr.announce)
-                    if (a.callback)
-                        a_cbs.emplace_back(std::move(a.callback));
-                for (const auto& a : a_cbs)
-                    a(false, {});
+                {
+                    auto get_cbs = std::move(sr.callbacks);
+                    for (const auto& g : get_cbs) {
+                        if (g.done_cb)
+                            g.done_cb(false, {});
+                    }
+                }
+                {
+                    std::vector<DoneCallback> a_cbs;
+                    a_cbs.reserve(sr.announce.size());
+                    for (const auto& a : sr.announce)
+                        if (a.callback)
+                            a_cbs.emplace_back(std::move(a.callback));
+                    for (const auto& a : a_cbs)
+                        a(false, {});
+                }
             }
         }
     }
@@ -1024,13 +1032,15 @@ Dht::newSearch()
 }
 
 /* Insert the contents of a bucket into a search structure. */
-void
+unsigned
 Dht::Search::insertBucket(const Bucket& b, time_point now)
 {
+    unsigned inserted = 0;
     for (auto& n : b.nodes) {
-        if (not n->isExpired(now))
-            insertNode(n, now);
+        if (not n->isExpired(now) and insertNode(n, now))
+            inserted++;
     }
+    return inserted;
 }
 
 bool
@@ -1234,6 +1244,27 @@ Dht::bootstrapSearch(Dht::Search& sr)
     }
     if (sr.nodes.size() < SEARCH_NODES)
         sr.insertBucket(*list.findBucket(myid), now);
+}
+
+unsigned
+Dht::Search::refill(const RoutingTable& r, time_point now) {
+    if (r.isEmpty() or r.front().af != af)
+        return 0;
+    unsigned added = 0;
+    auto b = r.findBucket(id);
+    auto n = b;
+    while (added < SEARCH_NODES && (std::next(n) != r.end() || b != r.begin())) {
+        if (std::next(n) != r.end()) {
+            added += insertBucket(*std::next(n), now);
+            n = std::next(n);
+        }
+        if (b != r.begin()) {
+            added += insertBucket(*std::prev(b), now);
+            b = std::prev(b);
+        }
+    }
+    //DHT_WARN("[search %s IPv%c] refilled with %u nodes", id.toString().c_str(), (af == AF_INET) ? '4' : '6', added);
+    return added;
 }
 
 /* Start a search. */
