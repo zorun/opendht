@@ -1041,7 +1041,7 @@ Dht::searchStep(Search& sr)
                     return sn.candidate or sn.node->isExpired(now);
                 }) == sr.nodes.size())
         {
-            unsigned added = sr.refill(sr.af == AF_INET ? buckets : buckets6, now);
+            unsigned added = false;//sr.refill(sr.af == AF_INET ? buckets : buckets6, now);
             if (added) {
                 DHT_WARN("[search %s IPv%c] refilled with %u nodes", sr.id.toString().c_str(), (sr.af == AF_INET) ? '4' : '6', added);
             } else {
@@ -2737,18 +2737,7 @@ Dht::periodic(const uint8_t *buf, size_t buflen,
         confirm_nodes_time = now + time_dis(rd);
     }
 
-    //data persistence
-    time_point storage_maintenance_time = time_point::max();
-    for (auto &str : store) {
-        if (now > str.maintenance_time) {
-            maintainStorage(str.id);
-            str.maintenance_time = now + MAX_STORAGE_MAINTENANCE_EXPIRE_TIME;
-
-        }
-        storage_maintenance_time = std::min(storage_maintenance_time, str.maintenance_time);
-    }
-
-    return std::min(confirm_nodes_time, std::min(search_time, storage_maintenance_time));
+    return std::min(confirm_nodes_time, search_time);
 }
 
 std::vector<Dht::ValuesExport>
