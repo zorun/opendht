@@ -32,6 +32,7 @@ list (APPEND opendht_SOURCES
 	src/default_types.cpp
 	src/value.cpp
 	src/dht.cpp
+	src/network_engine.cpp
 	src/securedht.cpp
 	src/dhtrunner.cpp
 	src/argon2/argon2.c
@@ -50,6 +51,7 @@ list (APPEND opendht_HEADERS
 	include/opendht/default_types.h
 	include/opendht/value.h
 	include/opendht/dht.h
+    include/opendht/network_engine.h
 	include/opendht/securedht.h
 	include/opendht/log.h
 	include/opendht.h
