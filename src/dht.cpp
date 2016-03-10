@@ -1856,7 +1856,7 @@ void
 Dht::connectivityChanged()
 {
     const auto& now = scheduler.time();
-    scheduler.add(now, std::bind(&Dht::confirmNodes, this));
+    scheduler.add(now, std::bind(&Dht::confirmNodes, this, false));
     mybucket_grow_time = now;
     mybucket6_grow_time = now;
     reported_addr.clear();
@@ -2191,7 +2191,7 @@ Dht::Dht(int s, int s6, Config config)
 
     uniform_duration_distribution<> time_dis {std::chrono::seconds(0), std::chrono::seconds(3)};
     auto confirm_nodes_time = scheduler.time() + time_dis(rd);
-    scheduler.add(confirm_nodes_time, std::bind(&Dht::confirmNodes, this));
+    scheduler.add(confirm_nodes_time, std::bind(&Dht::confirmNodes, this, true));
 
     // Fill old secret
     {
@@ -2410,7 +2410,7 @@ Dht::expire()
 }
 
 void
-Dht::confirmNodes()
+Dht::confirmNodes(bool reschedule)
 {
     using namespace std::chrono;
     bool soon = false;
@@ -2439,7 +2439,8 @@ Dht::confirmNodes()
     : uniform_duration_distribution<> {seconds(60), seconds(180)};
     auto confirm_nodes_time = now + time_dis(rd);
 
-    scheduler.add(confirm_nodes_time, std::bind(&Dht::confirmNodes, this));
+    if (reschedule)
+        scheduler.add(confirm_nodes_time, std::bind(&Dht::confirmNodes, this, reschedule));
 }
 
 std::vector<Dht::ValuesExport>
