@@ -799,14 +799,14 @@ Dht::searchSendGetValues(std::shared_ptr<Search> sr, SearchNode* pn, bool update
         n->node->pinged);
 
     auto onDone =
-        [=](std::shared_ptr<NetworkEngine::RequestStatus> status, NetworkEngine::RequestAnswer&& answer) mutable {
+        [=](std::shared_ptr<NetworkEngine::Request> status, NetworkEngine::RequestAnswer&& answer) mutable {
             if (sr) {
                 sr->insertNode(status->node, scheduler.time(), answer.ntoken);
                 onGetValuesDone(status, answer, sr);
             }
         };
     auto onExpired =
-        [=](std::shared_ptr<NetworkEngine::RequestStatus> status, bool over) mutable {
+        [=](std::shared_ptr<NetworkEngine::Request> status, bool over) mutable {
             if (sr) {
                 if (not over) {
                     auto srn = std::find_if(sr->nodes.begin(), sr->nodes.end(), [&status](SearchNode& sn) {
@@ -823,7 +823,7 @@ Dht::searchSendGetValues(std::shared_ptr<Search> sr, SearchNode* pn, bool update
                 searchStep(sr);
             }
         };
-    std::shared_ptr<NetworkEngine::RequestStatus> rstatus;
+    std::shared_ptr<NetworkEngine::Request> rstatus;
     if (sr->callbacks.empty() and sr->listeners.empty())
         rstatus = network_engine.sendFindNode(n->node, sr->id, -1, onDone, onExpired);
     else
@@ -891,7 +891,7 @@ Dht::searchStep(std::shared_ptr<Search> sr)
                     //std::cout << "Sending listen to " << n.node->id << " " << print_addr(n.node->ss, n.node->sslen) << std::endl;
 
                     n.listenStatus = network_engine.sendListen(n.node, sr->id, n.token,
-                        [=](std::shared_ptr<NetworkEngine::RequestStatus> status,
+                        [=](std::shared_ptr<NetworkEngine::Request> status,
                                 NetworkEngine::RequestAnswer&& answer) mutable
                         { /* on done */
                             if (sr) {
@@ -899,7 +899,7 @@ Dht::searchStep(std::shared_ptr<Search> sr)
                                 searchStep(sr);
                             }
                         },
-                        [=](std::shared_ptr<NetworkEngine::RequestStatus>, bool) mutable
+                        [=](std::shared_ptr<NetworkEngine::Request>, bool) mutable
                         { /* on expired */
                             if (sr) {
                                 searchStep(sr);
@@ -936,14 +936,14 @@ Dht::searchStep(std::shared_ptr<Search> sr)
                     //std::cout << "Sending announce_value to " << n.node->id << " " << print_addr(n.node->ss, n.node->sslen) << std::endl;
 
                     n.acked[vid] = network_engine.sendAnnounceValue(n.node, sr->id, *a.value, a.created, n.token,
-                        [=](std::shared_ptr<NetworkEngine::RequestStatus> status, NetworkEngine::RequestAnswer&& answer) mutable
+                        [=](std::shared_ptr<NetworkEngine::Request> status, NetworkEngine::RequestAnswer&& answer) mutable
                         { /* on done */
                             if (sr) {
                                 onAnnounceDone(status, answer, sr);
                                 searchStep(sr);
                             }
                         },
-                        [=](std::shared_ptr<NetworkEngine::RequestStatus>, bool) mutable
+                        [=](std::shared_ptr<NetworkEngine::Request>, bool) mutable
                         { /* on expired */
                             if (sr) { searchStep(sr); }
                         }
@@ -2562,7 +2562,7 @@ Dht::pingNode(const sockaddr *sa, socklen_t salen)
 }
 
 void
-Dht::onError(std::shared_ptr<NetworkEngine::RequestStatus> status, DhtProtocolException e) {
+Dht::onError(std::shared_ptr<NetworkEngine::Request> status, DhtProtocolException e) {
     if (e.getCode() == DhtProtocolException::UNAUTHORIZED) {
         //TODO
         //auto esr = searches.find(status);
@@ -2651,7 +2651,7 @@ Dht::onGetValues(std::shared_ptr<Node> node, InfoHash& hash, want_t)
 }
 
 void
-Dht::onGetValuesDone(std::shared_ptr<NetworkEngine::RequestStatus> status,
+Dht::onGetValuesDone(std::shared_ptr<NetworkEngine::Request> status,
         NetworkEngine::RequestAnswer& a, std::shared_ptr<Search> sr)
 {
     if (not sr) {
@@ -2726,7 +2726,7 @@ Dht::onListen(std::shared_ptr<Node> node, InfoHash& hash, Blob& token, size_t ri
 }
 
 void
-Dht::onListenDone(std::shared_ptr<NetworkEngine::RequestStatus>& status, NetworkEngine::RequestAnswer& answer, std::shared_ptr<Search>& sr)
+Dht::onListenDone(std::shared_ptr<NetworkEngine::Request>& status, NetworkEngine::RequestAnswer& answer, std::shared_ptr<Search>& sr)
 {
     DHT_LOG.DEBUG("[search %s] Got reply to listen.", sr->id.toString().c_str());
     const auto& now = scheduler.time();
@@ -2813,7 +2813,7 @@ Dht::onAnnounce(std::shared_ptr<Node> node, InfoHash& hash, Blob& token, std::ve
 }
 
 void
-Dht::onAnnounceDone(std::shared_ptr<NetworkEngine::RequestStatus>& status, NetworkEngine::RequestAnswer& answer,
+Dht::onAnnounceDone(std::shared_ptr<NetworkEngine::Request>& status, NetworkEngine::RequestAnswer& answer,
         std::shared_ptr<Search>& sr)
 {
     const auto& now = scheduler.time();
