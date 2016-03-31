@@ -890,6 +890,7 @@ Dht::searchStep(std::shared_ptr<Search> sr)
                         print_addr(n.node->ss, n.node->sslen).c_str());
                     //std::cout << "Sending listen to " << n.node->id << " " << print_addr(n.node->ss, n.node->sslen) << std::endl;
 
+                    network_engine.cancelRequest(n.listenStatus);
                     n.listenStatus = network_engine.sendListen(n.node, sr->id, n.token,
                         [=](std::shared_ptr<NetworkEngine::Request> status,
                                 NetworkEngine::RequestAnswer&& answer) mutable
@@ -1498,6 +1499,8 @@ Dht::cancelListen(const InfoHash& id, size_t token)
             if (af_token == 0)
                 continue;
             s->listeners.erase(af_token);
+            for (auto& sn : s->nodes) // also erase requests for all searchnodes.
+                network_engine.cancelRequest(sn.listenStatus);
         }
     };
     searches_cancel_listen(searches4);
