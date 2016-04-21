@@ -969,6 +969,9 @@ Dht::searchStep(std::shared_ptr<Search> sr)
             }
         }
     }
+
+    /* periodic searchStep scheduling. */
+    sr->nextSearchStep = scheduler.edit(sr->nextSearchStep, sr->getNextStepTime(types, now));
 }
 
 
