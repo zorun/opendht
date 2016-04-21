@@ -8,7 +8,7 @@ target_link_libraries (dhtscanner LINK_PUBLIC opendht gnutls readline)
 target_link_libraries (dhtchat LINK_PUBLIC opendht gnutls readline)
 
 if (NOT DEFINED CMAKE_INSTALL_BINDIR)
-	set(CMAKE_INSTALL_BINDIR bin)
+    set(CMAKE_INSTALL_BINDIR bin)
 endif ()
 
 install (TARGETS dhtnode dhtscanner dhtchat RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
