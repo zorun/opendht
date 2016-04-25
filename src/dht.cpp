@@ -537,11 +537,12 @@ Dht::Search::insertNode(std::shared_ptr<Node> node, time_point now, const Blob& 
         }*//* else {
             std::cout << "Adding real node " << node->id << " to IPv" << (af==AF_INET?'4':'6') << " synced search " << id << std::endl;
         }*/
-        if (nodes.size()-num_bad_nodes > SEARCH_NODES) {
-            removeExpiredNode(now);
+        while (nodes.size()-num_bad_nodes > SEARCH_NODES) {
+            if (removeExpiredNode(now))
+                num_bad_nodes--;
 
             auto farthest_not_expired_node = std::find_if(nodes.rbegin(), nodes.rend(),
-                [=](const SearchNode& n) { return n.node->isGood(now) or n.candidate; }
+                [=](const SearchNode& n) { return not n.node->isExpired(now) and not n.candidate; }
             );
             if (farthest_not_expired_node != nodes.rend()) {
                 nodes.erase(std::prev(farthest_not_expired_node.base()));
@@ -1076,6 +1077,7 @@ Dht::bootstrapSearch(Dht::Search& sr)
     }
     if (sr.nodes.size() < SEARCH_NODES)
         sr.insertBucket(*list.findBucket(myid), now);
+    sr.refill_time = now;
 }
 
 unsigned
